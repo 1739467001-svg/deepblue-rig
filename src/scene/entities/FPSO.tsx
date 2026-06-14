@@ -35,6 +35,8 @@ export function FPSO() {
   })
 
   return (
+    <>
+    <MooringLines base={base} />
     <group ref={groupRef}>
       {/* 船体 */}
       <mesh castShadow receiveShadow position={[0, -1, 0]}>
@@ -72,6 +74,38 @@ export function FPSO() {
       <MooringLight position={[0, 18, LEN / 2 - 4]} />
       {/* 夜间甲板工作灯 / 航行灯 / 上层建筑窗光 */}
       <FpsoNightLights len={LEN} beam={BEAM} />
+    </group>
+    </>
+  )
+}
+
+/**
+ * 系泊锚链:从船体导缆孔以悬链线垂入海床锚点(世界坐标,不随船起伏),
+ * 向四周发散,呈现 FPSO 的转塔/扩展式系泊外观。
+ */
+function MooringLines({ base }: { base: THREE.Vector3 }) {
+  const geos = useMemo(() => {
+    const seabedY = -45 - base.y // 相对 base 的海床
+    const fairleads: [number, number, number][] = [
+      [0, 6, -55], [-11, 2, -40], [11, 2, -40],
+      [-11, 2, 40], [11, 2, 40], [0, 6, 55],
+    ]
+    return fairleads.map((f) => {
+      const fl = new THREE.Vector3(f[0], f[1], f[2])
+      const out = new THREE.Vector3(f[0], 0, f[2]).normalize().multiplyScalar(130)
+      const anchor = new THREE.Vector3(out.x, seabedY, out.z)
+      const mid = fl.clone().lerp(anchor, 0.5).add(new THREE.Vector3(0, -16, 0)) // 悬链下垂
+      const curve = new THREE.CatmullRomCurve3([fl, mid, anchor])
+      return new THREE.TubeGeometry(curve, 28, 0.18, 6, false)
+    })
+  }, [base])
+  return (
+    <group position={base}>
+      {geos.map((g, i) => (
+        <mesh key={i} geometry={g} castShadow>
+          <meshStandardMaterial color="#23262a" metalness={0.6} roughness={0.75} />
+        </mesh>
+      ))}
     </group>
   )
 }

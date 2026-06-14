@@ -33,7 +33,123 @@ export function Platform() {
       <ObstacleLights />
       <DeckLights />
       <HelideckLights />
+      <Lifeboats />
+      <DeckAccess />
       <Waterline />
+    </group>
+  )
+}
+
+/** 全封闭橙色救生艇 + 达维特吊架(挂在甲板东侧边缘) */
+function Lifeboats() {
+  const boats: [number, number][] = [[21, 7], [21, -7]]
+  return (
+    <group position={[0, DECK_Y, 0]}>
+      {boats.map(([x, z], i) => (
+        <group key={i} position={[x, 1, z]}>
+          {/* 达维特吊架 */}
+          <Beam from={new THREE.Vector3(-1, 0, -1.6)} to={new THREE.Vector3(3, 5, -1.6)} radius={0.18} mat={STEEL} />
+          <Beam from={new THREE.Vector3(-1, 0, 1.6)} to={new THREE.Vector3(3, 5, 1.6)} radius={0.18} mat={STEEL} />
+          <Beam from={new THREE.Vector3(3, 5, -1.6)} to={new THREE.Vector3(3, 5, 1.6)} radius={0.15} mat={STEEL} />
+          {/* 吊索 */}
+          <mesh position={[3, 3, -1.5]}><cylinderGeometry args={[0.04, 0.04, 4, 6]} /><meshStandardMaterial color="#1a1a1a" /></mesh>
+          <mesh position={[3, 3, 1.5]}><cylinderGeometry args={[0.04, 0.04, 4, 6]} /><meshStandardMaterial color="#1a1a1a" /></mesh>
+          {/* 救生艇本体 */}
+          <group position={[3, 1, 0]}>
+            <mesh rotation={[Math.PI / 2, 0, 0]} castShadow>
+              <capsuleGeometry args={[1.1, 3.8, 6, 12]} />
+              <meshStandardMaterial color="#ff7a18" metalness={0.2} roughness={0.5} />
+            </mesh>
+            <mesh position={[0, 0.7, 0]} castShadow>
+              <boxGeometry args={[1.4, 0.7, 3]} />
+              <meshStandardMaterial color="#ff8c33" metalness={0.2} roughness={0.5} />
+            </mesh>
+          </group>
+        </group>
+      ))}
+    </group>
+  )
+}
+
+/** 甲板通道:外侧上行楼梯 + 井架带护笼直爬梯 */
+function DeckAccess() {
+  return (
+    <group>
+      {/* 主甲板通往生活楼顶的斜梯 */}
+      <Stair
+        from={new THREE.Vector3(-21, DECK_Y + 0.5, -2)}
+        to={new THREE.Vector3(-21, DECK_Y + 13, -10)}
+      />
+      {/* 井架腿上的护笼爬梯 */}
+      <CagedLadder position={[6 - 5, DECK_Y + 1, 8 - 5]} height={20} />
+    </group>
+  )
+}
+
+/** 一段带护栏与斜梁的钢直梯(沿局部 +Z 构建,旋转对齐 from→to 方向) */
+function Stair({ from, to, width = 2 }: { from: THREE.Vector3; to: THREE.Vector3; width?: number }) {
+  const dir = to.clone().sub(from)
+  const horiz = new THREE.Vector3(dir.x, 0, dir.z)
+  const runLen = horiz.length()
+  const rise = dir.y
+  const yaw = Math.atan2(horiz.x, horiz.z)
+  const half = width / 2
+  const n = 11
+  const steps: JSX.Element[] = []
+  for (let i = 0; i < n; i++) {
+    const f = (i + 0.5) / n
+    steps.push(
+      <mesh key={i} position={[0, rise * f, runLen * f]} castShadow receiveShadow>
+        <boxGeometry args={[width, 0.12, 0.7]} />
+        <meshStandardMaterial {...DECK_GREY} />
+      </mesh>,
+    )
+  }
+  const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z)
+  return (
+    <group position={from} rotation={[0, yaw, 0]}>
+      {steps}
+      {/* 斜梁 */}
+      <Beam from={v(half, 0, 0)} to={v(half, rise, runLen)} radius={0.1} mat={STEEL_DARK} />
+      <Beam from={v(-half, 0, 0)} to={v(-half, rise, runLen)} radius={0.1} mat={STEEL_DARK} />
+      {/* 扶手 */}
+      <Beam from={v(half, 1, 0)} to={v(half, rise + 1, runLen)} radius={0.05} mat={RAIL_MAT} />
+      <Beam from={v(-half, 1, 0)} to={v(-half, rise + 1, runLen)} radius={0.05} mat={RAIL_MAT} />
+    </group>
+  )
+}
+
+/** 带安全护笼的垂直爬梯 */
+function CagedLadder({ position, height }: { position: [number, number, number]; height: number }) {
+  const rungs: JSX.Element[] = []
+  const rungStep = 0.5
+  const nR = Math.floor(height / rungStep)
+  for (let i = 1; i < nR; i++) {
+    rungs.push(
+      <mesh key={`r${i}`} position={[0, i * rungStep, 0]} rotation={[Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[0.04, 0.04, 0.6, 6]} />
+        <meshStandardMaterial {...STEEL} />
+      </mesh>,
+    )
+  }
+  const hoops: JSX.Element[] = []
+  const hoopStep = 1.4
+  const nH = Math.floor(height / hoopStep)
+  for (let i = 2; i < nH; i++) {
+    hoops.push(
+      <mesh key={`h${i}`} position={[0.45, i * hoopStep, 0]} rotation={[0, 0, Math.PI / 2]}>
+        <torusGeometry args={[0.5, 0.03, 6, 14, Math.PI * 1.2]} />
+        <meshStandardMaterial {...STEEL_DARK} />
+      </mesh>,
+    )
+  }
+  return (
+    <group position={position}>
+      {/* 两侧立柱 */}
+      <mesh position={[0, height / 2, -0.3]}><cylinderGeometry args={[0.05, 0.05, height, 6]} /><meshStandardMaterial {...STEEL} /></mesh>
+      <mesh position={[0, height / 2, 0.3]}><cylinderGeometry args={[0.05, 0.05, height, 6]} /><meshStandardMaterial {...STEEL} /></mesh>
+      {rungs}
+      {hoops}
     </group>
   )
 }
