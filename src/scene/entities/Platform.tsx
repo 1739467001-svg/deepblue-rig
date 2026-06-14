@@ -1,0 +1,453 @@
+import { useMemo, useRef } from 'react'
+import { useFrame } from '@react-three/fiber'
+import * as THREE from 'three'
+import { useSceneStore } from '../../state/store'
+import { Flare } from '../effects/Flare'
+
+/**
+ * 程序化导管架式钻井平台:
+ * 导管架(桁架腿 + 斜撑)+ 甲板模块 + 井架 + 生活楼 + 直升机坪 + 吊机。
+ * 甲板面约在 y=24,导管架从海面下延伸至 deck。
+ */
+
+const STEEL = { color: '#d8b24a', metalness: 0.85, roughness: 0.55 }
+const STEEL_DARK = { color: '#8a7a3a', metalness: 0.8, roughness: 0.6 }
+const PAINT_RED = { color: '#b5402f', metalness: 0.4, roughness: 0.6 }
+const PAINT_WHITE = { color: '#c9ccd0', metalness: 0.3, roughness: 0.55 }
+const DECK_GREY = { color: '#5a6066', metalness: 0.6, roughness: 0.7 }
+
+const DECK_Y = 24
+const LEG_SPAN = 16
+
+export function Platform() {
+  return (
+    <group name="platform-A">
+      <Jacket />
+      <Deck />
+      <Derrick />
+      <LivingQuarters />
+      <Helipad />
+      <Crane />
+      <Flare position={[44, 0, -18]} deckY={DECK_Y} />
+      <ObstacleLights />
+      <Waterline />
+    </group>
+  )
+}
+
+/** 导管架:4 条主腿向下外扩 + X 形斜撑 */
+function Jacket() {
+  const legs = useMemo(() => {
+    const arr: { x: number; z: number }[] = []
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) arr.push({ x: sx * LEG_SPAN, z: sz * LEG_SPAN })
+    return arr
+  }, [])
+
+  const seabedY = -45
+  return (
+    <group>
+      {legs.map((l, i) => {
+        // 腿从甲板下方斜插入海床,底部更外扩
+        const topX = l.x
+        const topZ = l.z
+        const botX = l.x * 1.7
+        const botZ = l.z * 1.7
+        const top = new THREE.Vector3(topX, DECK_Y - 2, topZ)
+        const bot = new THREE.Vector3(botX, seabedY, botZ)
+        return <Beam key={i} from={top} to={bot} radius={1.1} mat={STEEL} />
+      })}
+      {/* 水平环梁 + X 斜撑(分 3 层) */}
+      {[-2, -18, -34].map((y, li) => (
+        <HorizontalRing key={li} y={y} scale={THREE.MathUtils.lerp(1, 1.7, (DECK_Y - 2 - y) / (DECK_Y - 2 - seabedY))} />
+      ))}
+      {[[-2, -18], [-18, -34]].map(([yt, yb], li) => (
+        <XBracing key={li} yTop={yt} yBot={yb} />
+      ))}
+    </group>
+  )
+}
+
+function HorizontalRing({ y, scale }: { y: number; scale: number }) {
+  const s = LEG_SPAN * scale
+  const corners = [
+    new THREE.Vector3(-s, y, -s),
+    new THREE.Vector3(s, y, -s),
+    new THREE.Vector3(s, y, s),
+    new THREE.Vector3(-s, y, s),
+  ]
+  return (
+    <>
+      {corners.map((c, i) => (
+        <Beam key={i} from={c} to={corners[(i + 1) % 4]} radius={0.6} mat={STEEL_DARK} />
+      ))}
+    </>
+  )
+}
+
+function XBracing({ yTop, yBot }: { yTop: number; yBot: number }) {
+  const st = scaleAt(yTop)
+  const sb = scaleAt(yBot)
+  const faces: [THREE.Vector3, THREE.Vector3, THREE.Vector3, THREE.Vector3][] = []
+  const top = [
+    new THREE.Vector3(-LEG_SPAN * st, yTop, -LEG_SPAN * st),
+    new THREE.Vector3(LEG_SPAN * st, yTop, -LEG_SPAN * st),
+    new THREE.Vector3(LEG_SPAN * st, yTop, LEG_SPAN * st),
+    new THREE.Vector3(-LEG_SPAN * st, yTop, LEG_SPAN * st),
+  ]
+  const bot = [
+    new THREE.Vector3(-LEG_SPAN * sb, yBot, -LEG_SPAN * sb),
+    new THREE.Vector3(LEG_SPAN * sb, yBot, -LEG_SPAN * sb),
+    new THREE.Vector3(LEG_SPAN * sb, yBot, LEG_SPAN * sb),
+    new THREE.Vector3(-LEG_SPAN * sb, yBot, LEG_SPAN * sb),
+  ]
+  for (let i = 0; i < 4; i++) {
+    const j = (i + 1) % 4
+    faces.push([top[i], bot[j], bot[i], top[j]])
+  }
+  return (
+    <>
+      {faces.map((f, i) => (
+        <group key={i}>
+          <Beam from={f[0]} to={f[1]} radius={0.45} mat={STEEL_DARK} />
+          <Beam from={f[2]} to={f[3]} radius={0.45} mat={STEEL_DARK} />
+        </group>
+      ))}
+    </>
+  )
+}
+
+function scaleAt(y: number) {
+  const seabedY = -45
+  return THREE.MathUtils.lerp(1, 1.7, (DECK_Y - 2 - y) / (DECK_Y - 2 - seabedY))
+}
+
+/** 甲板:主甲板板 + 边梁 + 栏杆 + 设备模块 */
+function Deck() {
+  return (
+    <group position={[0, DECK_Y, 0]}>
+      {/* 主甲板 */}
+      <mesh castShadow receiveShadow position={[0, 0, 0]}>
+        <boxGeometry args={[42, 2, 42]} />
+        <meshStandardMaterial {...DECK_GREY} />
+      </mesh>
+      {/* 下层模块甲板 */}
+      <mesh castShadow receiveShadow position={[0, -6, 0]}>
+        <boxGeometry args={[36, 1.2, 36]} />
+        <meshStandardMaterial {...STEEL_DARK} />
+      </mesh>
+      {/* 工艺模块(管汇/分离器近似) */}
+      <ProcessModules />
+      {/* 注水泵设备 */}
+      <PumpSkid />
+      {/* 栏杆 */}
+      <Railings half={21} y={1.6} />
+    </group>
+  )
+}
+
+function ProcessModules() {
+  return (
+    <group position={[-6, 4, -6]}>
+      {[0, 1, 2].map((i) => (
+        <mesh key={i} castShadow receiveShadow position={[i * 7 - 7, 0, 0]}>
+          <cylinderGeometry args={[2.2, 2.2, 7, 20]} />
+          <meshStandardMaterial color="#8a9095" metalness={0.7} roughness={0.45} />
+        </mesh>
+      ))}
+      {/* 管廊 */}
+      <mesh castShadow position={[0, 4.5, 6]}>
+        <boxGeometry args={[22, 0.8, 1.4]} />
+        <meshStandardMaterial {...STEEL} />
+      </mesh>
+    </group>
+  )
+}
+
+/** 注水泵橇,status=fault 时停转并变红 */
+function PumpSkid() {
+  const rotorRef = useRef<THREE.Group>(null!)
+  const ledRef = useRef<THREE.MeshStandardMaterial>(null!)
+  useFrame((state, delta) => {
+    const pump = useSceneStore.getState().devices['platform-A.pump-1']
+    if (!pump) return
+    const running = pump.status === 'running' || pump.status === 'warning'
+    const rpm = (pump.metrics.rpm ?? 1480) / 1480
+    if (running) rotorRef.current.rotation.z += delta * 6 * rpm
+    if (ledRef.current) {
+      const col =
+        pump.status === 'fault' ? '#ff3030' :
+        pump.status === 'warning' ? '#ffc23d' :
+        pump.status === 'offline' ? '#444' : '#22e07a'
+      ledRef.current.emissive.set(col)
+      const pulse = pump.status === 'fault'
+        ? (Math.sin(state.clock.elapsedTime * 12) * 0.5 + 0.5)
+        : pump.status === 'warning'
+        ? (Math.sin(state.clock.elapsedTime * 5) * 0.4 + 0.6)
+        : 1
+      ledRef.current.emissiveIntensity = pulse * 3
+    }
+  })
+  return (
+    <group position={[8, 2.6, -6]}>
+      <mesh castShadow receiveShadow>
+        <boxGeometry args={[5, 3, 3]} />
+        <meshStandardMaterial color="#3f6fae" metalness={0.5} roughness={0.5} />
+      </mesh>
+      <group ref={rotorRef} position={[0, 0, 1.7]}>
+        <mesh rotation={[Math.PI / 2, 0, 0]}>
+          <cylinderGeometry args={[1.1, 1.1, 0.6, 16]} />
+          <meshStandardMaterial color="#d8d8d8" metalness={0.8} roughness={0.3} />
+        </mesh>
+        {/* 叶片标记,旋转可见 */}
+        <mesh position={[0, 0, 0.35]}>
+          <boxGeometry args={[2, 0.15, 0.05]} />
+          <meshStandardMaterial color="#222" metalness={0.5} roughness={0.5} />
+        </mesh>
+      </group>
+      {/* 状态灯 */}
+      <mesh position={[0, 2, 0]}>
+        <sphereGeometry args={[0.35, 16, 16]} />
+        <meshStandardMaterial ref={ledRef} color="#111" emissive="#22e07a" emissiveIntensity={3} />
+      </mesh>
+    </group>
+  )
+}
+
+/** 井架:格构塔 */
+function Derrick() {
+  const h = 38
+  const base = 6
+  const topW = 2.2
+  const segs = 8
+  const beams: JSX.Element[] = []
+  let key = 0
+  for (let s = 0; s < segs; s++) {
+    const y0 = (s / segs) * h
+    const y1 = ((s + 1) / segs) * h
+    const w0 = THREE.MathUtils.lerp(base, topW, s / segs)
+    const w1 = THREE.MathUtils.lerp(base, topW, (s + 1) / segs)
+    const c0 = corners(w0, y0)
+    const c1 = corners(w1, y1)
+    for (let i = 0; i < 4; i++) {
+      const j = (i + 1) % 4
+      beams.push(<Beam key={key++} from={c0[i]} to={c1[i]} radius={0.28} mat={STEEL} />)
+      beams.push(<Beam key={key++} from={c0[i]} to={c0[j]} radius={0.2} mat={STEEL_DARK} />)
+      beams.push(<Beam key={key++} from={c0[i]} to={c1[j]} radius={0.16} mat={STEEL_DARK} />)
+    }
+  }
+  return (
+    <group position={[6, DECK_Y + 1, 8]}>
+      {beams}
+      {/* 顶部天车 */}
+      <mesh position={[0, h, 0]} castShadow>
+        <boxGeometry args={[topW + 1, 1.4, topW + 1]} />
+        <meshStandardMaterial {...PAINT_RED} />
+      </mesh>
+    </group>
+  )
+
+  function corners(w: number, y: number) {
+    return [
+      new THREE.Vector3(-w, y, -w),
+      new THREE.Vector3(w, y, -w),
+      new THREE.Vector3(w, y, w),
+      new THREE.Vector3(-w, y, w),
+    ]
+  }
+}
+
+/** 生活楼:多层白色舱室块 + 窗带 */
+function LivingQuarters() {
+  return (
+    <group position={[-13, DECK_Y + 1, -10]}>
+      <mesh castShadow receiveShadow position={[0, 6, 0]}>
+        <boxGeometry args={[14, 12, 12]} />
+        <meshStandardMaterial {...PAINT_WHITE} />
+      </mesh>
+      {/* 窗带 */}
+      {[3, 6.5, 10].map((y, i) => (
+        <mesh key={i} position={[0, y, 6.05]}>
+          <boxGeometry args={[12, 0.9, 0.1]} />
+          <meshStandardMaterial color="#1b2733" emissive="#2a3a4a" emissiveIntensity={0.3} metalness={0.2} roughness={0.2} />
+        </mesh>
+      ))}
+    </group>
+  )
+}
+
+/** 直升机坪:带 H 标记的圆台,挑出甲板 */
+function Helipad() {
+  return (
+    <group position={[0, DECK_Y + 1, 24]}>
+      <mesh castShadow receiveShadow>
+        <cylinderGeometry args={[11, 11, 1, 40]} />
+        <meshStandardMaterial color="#3a4a3f" metalness={0.2} roughness={0.85} />
+      </mesh>
+      <mesh position={[0, 0.55, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[9.3, 10, 48]} />
+        <meshStandardMaterial color="#e8e8e8" side={THREE.DoubleSide} />
+      </mesh>
+      {/* H 字母 */}
+      <group position={[0, 0.56, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <mesh position={[-2.5, 0, 0]}><boxGeometry args={[1.1, 7, 0.1]} /><meshStandardMaterial color="#fff" /></mesh>
+        <mesh position={[2.5, 0, 0]}><boxGeometry args={[1.1, 7, 0.1]} /><meshStandardMaterial color="#fff" /></mesh>
+        <mesh><boxGeometry args={[5, 1.1, 0.1]} /><meshStandardMaterial color="#fff" /></mesh>
+      </group>
+      {/* 支撑挑梁 */}
+      <Beam from={new THREE.Vector3(0, -0.5, -8)} to={new THREE.Vector3(0, -6, -14)} radius={0.5} mat={STEEL} />
+    </group>
+  )
+}
+
+/** 吊机:塔身 + 可回转吊臂 + 单摆吊钩 */
+function Crane() {
+  const slewRef = useRef<THREE.Group>(null!)
+  const hookRef = useRef<THREE.Group>(null!)
+  useFrame((state) => {
+    const t = state.clock.elapsedTime
+    const dev = useSceneStore.getState().devices['platform-A.crane-1']
+    const active = dev?.status !== 'offline' && dev?.status !== 'fault'
+    if (active) {
+      slewRef.current.rotation.y = Math.sin(t * 0.12) * THREE.MathUtils.degToRad(15)
+      hookRef.current.rotation.z = Math.sin(t * 0.9) * 0.06
+    }
+  })
+  return (
+    <group position={[-14, DECK_Y + 1, 10]}>
+      {/* 基座 */}
+      <mesh castShadow><cylinderGeometry args={[2, 2.4, 4, 16]} /><meshStandardMaterial {...PAINT_RED} /></mesh>
+      <group ref={slewRef} position={[0, 4, 0]}>
+        {/* 机房 */}
+        <mesh castShadow position={[-1.5, 1, 0]}><boxGeometry args={[4, 3, 3]} /><meshStandardMaterial {...PAINT_RED} /></mesh>
+        {/* 吊臂 */}
+        <group position={[0, 1.5, 0]} rotation={[0, 0, THREE.MathUtils.degToRad(28)]}>
+          <Beam from={new THREE.Vector3(0, 0, -0.8)} to={new THREE.Vector3(26, 0, -0.8)} radius={0.22} mat={STEEL} />
+          <Beam from={new THREE.Vector3(0, 0, 0.8)} to={new THREE.Vector3(26, 0, 0.8)} radius={0.22} mat={STEEL} />
+          <Beam from={new THREE.Vector3(0, 1.2, 0)} to={new THREE.Vector3(26, -0.2, 0)} radius={0.16} mat={STEEL_DARK} />
+        </group>
+        {/* 吊钩(从臂端垂下) */}
+        <group ref={hookRef} position={[22.5, 13, 0]}>
+          <mesh position={[0, -5, 0]}><cylinderGeometry args={[0.05, 0.05, 10, 6]} /><meshStandardMaterial color="#222" /></mesh>
+          <mesh position={[0, -10, 0]}><boxGeometry args={[0.6, 1, 0.6]} /><meshStandardMaterial {...STEEL} /></mesh>
+        </group>
+      </group>
+    </group>
+  )
+}
+
+/** 航空障碍灯:红色脉冲 emissive */
+function ObstacleLights() {
+  const refs = useRef<THREE.MeshStandardMaterial[]>([])
+  const positions: [number, number, number][] = [
+    [6, DECK_Y + 40, 8],   // 井架顶
+    [-13, DECK_Y + 13, -10], // 生活楼顶
+    [44, 64, -18],          // 火炬塔顶附近
+  ]
+  useFrame((state) => {
+    const t = state.clock.elapsedTime
+    refs.current.forEach((m, i) => {
+      if (!m) return
+      const phase = i * 1.1
+      const blink = Math.pow(Math.max(0, Math.sin(t * 1.6 + phase)), 8)
+      m.emissiveIntensity = blink * 6
+    })
+  })
+  return (
+    <>
+      {positions.map((p, i) => (
+        <mesh key={i} position={p}>
+          <sphereGeometry args={[0.5, 12, 12]} />
+          <meshStandardMaterial
+            ref={(m) => { if (m) refs.current[i] = m }}
+            color="#3a0000"
+            emissive="#ff1a1a"
+            emissiveIntensity={3}
+          />
+        </mesh>
+      ))}
+    </>
+  )
+}
+
+/** 导管架水线浪花(billboard 精灵环) */
+function Waterline() {
+  const ref = useRef<THREE.Group>(null!)
+  useFrame((state) => {
+    if (ref.current) {
+      const s = 1 + Math.sin(state.clock.elapsedTime * 1.5) * 0.08
+      ref.current.scale.set(s, 1, s)
+    }
+  })
+  return (
+    <group ref={ref}>
+      {[-1, 1].flatMap((sx) =>
+        [-1, 1].map((sz) => (
+          <sprite key={`${sx}${sz}`} position={[sx * LEG_SPAN * 1.05, 0.5, sz * LEG_SPAN * 1.05]} scale={[7, 4, 1]}>
+            <spriteMaterial color="#eaf4f8" opacity={0.5} transparent depthWrite={false} />
+          </sprite>
+        )),
+      )}
+    </group>
+  )
+}
+
+const RAIL_MAT = { color: '#d8b24a', metalness: 0.7, roughness: 0.5 }
+function Railings({ half, y }: { half: number; y: number }) {
+  const posts: JSX.Element[] = []
+  const step = 4
+  let k = 0
+  for (let i = -half; i <= half; i += step) {
+    for (const edge of ['n', 's', 'e', 'w'] as const) {
+      let p: [number, number, number]
+      if (edge === 'n') p = [i, y, -half]
+      else if (edge === 's') p = [i, y, half]
+      else if (edge === 'e') p = [half, y, i]
+      else p = [-half, y, i]
+      posts.push(
+        <mesh key={k++} position={p}>
+          <cylinderGeometry args={[0.08, 0.08, 1.6, 6]} />
+          <meshStandardMaterial {...RAIL_MAT} />
+        </mesh>,
+      )
+    }
+  }
+  // 横向扶手
+  const rails: JSX.Element[] = []
+  for (const ry of [y + 0.7, y]) {
+    rails.push(<Beam key={`n${ry}`} from={new THREE.Vector3(-half, ry + 0.8, -half)} to={new THREE.Vector3(half, ry + 0.8, -half)} radius={0.06} mat={RAIL_MAT} />)
+    rails.push(<Beam key={`s${ry}`} from={new THREE.Vector3(-half, ry + 0.8, half)} to={new THREE.Vector3(half, ry + 0.8, half)} radius={0.06} mat={RAIL_MAT} />)
+    rails.push(<Beam key={`e${ry}`} from={new THREE.Vector3(half, ry + 0.8, -half)} to={new THREE.Vector3(half, ry + 0.8, half)} radius={0.06} mat={RAIL_MAT} />)
+    rails.push(<Beam key={`w${ry}`} from={new THREE.Vector3(-half, ry + 0.8, -half)} to={new THREE.Vector3(-half, ry + 0.8, half)} radius={0.06} mat={RAIL_MAT} />)
+  }
+  return <>{posts}{rails}</>
+}
+
+/** 在两点间放置一根圆柱梁 */
+function Beam({
+  from,
+  to,
+  radius,
+  mat,
+}: {
+  from: THREE.Vector3
+  to: THREE.Vector3
+  radius: number
+  mat: { color: string; metalness: number; roughness: number }
+}) {
+  const { position, quaternion, length } = useMemo(() => {
+    const dir = new THREE.Vector3().subVectors(to, from)
+    const length = dir.length()
+    const position = new THREE.Vector3().addVectors(from, to).multiplyScalar(0.5)
+    const quaternion = new THREE.Quaternion().setFromUnitVectors(
+      new THREE.Vector3(0, 1, 0),
+      dir.clone().normalize(),
+    )
+    return { position, quaternion, length }
+  }, [from, to])
+  return (
+    <mesh position={position} quaternion={quaternion} castShadow receiveShadow>
+      <cylinderGeometry args={[radius, radius, length, 8]} />
+      <meshStandardMaterial {...mat} />
+    </mesh>
+  )
+}
