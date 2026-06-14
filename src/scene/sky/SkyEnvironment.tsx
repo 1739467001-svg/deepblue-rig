@@ -146,7 +146,20 @@ export function SkyEnvironment() {
         mieDirectionalG={0.93}
       />
       {isNight && (
-        <Stars radius={800} depth={120} count={4000} factor={5} saturation={0} fade speed={0.4} />
+        <>
+          <Stars radius={800} depth={120} count={4000} factor={5} saturation={0} fade speed={0.4} />
+          {/* 月亮:远处自发光圆盘 + 柔光晕 */}
+          <group position={[700, 520, -1100]}>
+            <mesh>
+              <sphereGeometry args={[42, 32, 32]} />
+              <meshBasicMaterial color="#eef2ff" toneMapped={false} />
+            </mesh>
+            <mesh>
+              <sphereGeometry args={[78, 32, 32]} />
+              <meshBasicMaterial color="#a9c0e8" transparent opacity={0.22} depthWrite={false} toneMapped={false} />
+            </mesh>
+          </group>
+        </>
       )}
 
       <directionalLight

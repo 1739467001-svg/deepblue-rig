@@ -1,8 +1,9 @@
 import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
-import { getHeightAt, getNormalAt } from '../ocean/waves'
+import { getHeightAt } from '../ocean/waves'
 import { useSceneStore } from '../../state/store'
+import { nightFactor } from '../sky/daylight'
 
 /**
  * FPSO 浮式储油船:船体随浪起伏(4 点采样拟合 pitch/roll/heave),
@@ -69,6 +70,80 @@ export function FPSO() {
       </mesh>
       {/* 舷灯 */}
       <MooringLight position={[0, 18, LEN / 2 - 4]} />
+      {/* 夜间甲板工作灯 / 航行灯 / 上层建筑窗光 */}
+      <FpsoNightLights len={LEN} beam={BEAM} />
+    </group>
+  )
+}
+
+/**
+ * FPSO 夜景灯光:甲板暖色工作灯 + 标准航行灯(左红右绿、桅顶/艉白)+ 上层建筑窗光。
+ * 全部随日落点亮,加 1 盏甲板暖光点光源做照明光池。
+ */
+function FpsoNightLights({ len, beam }: { len: number; beam: number }) {
+  const warmRefs = useRef<THREE.MeshStandardMaterial[]>([])
+  const navRefs = useRef<THREE.MeshStandardMaterial[]>([])
+  const deckLight = useRef<THREE.PointLight>(null!)
+
+  // 暖色:甲板灯柱 + 上层建筑窗带
+  const warm = useMemo(() => {
+    const arr: { p: [number, number, number]; win?: boolean }[] = []
+    // 甲板灯柱(储罐两侧)
+    for (const z of [-32, -10, 12, 30]) for (const sx of [-1, 1]) arr.push({ p: [sx * (beam / 2 - 2), 8, z] })
+    // 上层建筑前脸窗带(三层)+ 侧面
+    const ssZ = len / 2 - 12
+    for (const y of [3, 7, 10]) {
+      arr.push({ p: [0, 6 + (y - 6), ssZ - 8.02], win: true })
+      arr.push({ p: [9.02, 6 + (y - 6), ssZ], win: true })
+      arr.push({ p: [-9.02, 6 + (y - 6), ssZ], win: true })
+    }
+    return arr
+  }, [len, beam])
+
+  // 航行灯:左舷红、右舷绿、桅顶白、艉白
+  const nav = useMemo(
+    () => [
+      { p: [-beam / 2 - 0.3, 9, -len / 2 + 20] as [number, number, number], c: '#ff2a1a' },
+      { p: [beam / 2 + 0.3, 9, -len / 2 + 20] as [number, number, number], c: '#1aff4a' },
+      { p: [0, 24, len / 2 - 10] as [number, number, number], c: '#ffffff' },
+      { p: [0, 8, len / 2 + 0.3] as [number, number, number], c: '#ffffff' },
+    ],
+    [len, beam],
+  )
+
+  useFrame(() => {
+    const env = useSceneStore.getState().environment
+    const n = nightFactor(env.timeOfDay)
+    warmRefs.current.forEach((m) => { if (m) m.emissiveIntensity = n * 2.4 })
+    navRefs.current.forEach((m) => { if (m) m.emissiveIntensity = n * 4 })
+    if (deckLight.current) deckLight.current.intensity = n * 16
+  })
+
+  return (
+    <group>
+      {warm.map((w, i) => (
+        <mesh key={i} position={w.p}>
+          {w.win ? <boxGeometry args={[10, 0.8, 0.1]} /> : <sphereGeometry args={[0.35, 10, 10]} />}
+          <meshStandardMaterial
+            ref={(m) => { if (m) warmRefs.current[i] = m }}
+            color="#15110a"
+            emissive="#ffd596"
+            emissiveIntensity={0}
+          />
+        </mesh>
+      ))}
+      {nav.map((nv, i) => (
+        <mesh key={i} position={nv.p}>
+          <sphereGeometry args={[0.3, 8, 8]} />
+          <meshStandardMaterial
+            ref={(m) => { if (m) navRefs.current[i] = m }}
+            color="#050505"
+            emissive={nv.c}
+            emissiveIntensity={0}
+          />
+        </mesh>
+      ))}
+      <pointLight ref={deckLight} position={[0, 16, len / 2 - 16]} color="#ffdba0" distance={90} decay={1.8} intensity={0} />
     </group>
   )
 }

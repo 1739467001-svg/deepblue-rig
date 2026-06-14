@@ -9,6 +9,7 @@ import { Platform } from './scene/entities/Platform'
 import { FPSO } from './scene/entities/FPSO'
 import { Tanker } from './scene/entities/Tanker'
 import { Helicopter } from './scene/entities/Helicopter'
+import { Seagulls } from './scene/entities/Seagulls'
 import { CloudLayer } from './scene/weather/CloudLayer'
 import { Precipitation } from './scene/weather/Precipitation'
 import { Lightning } from './scene/weather/Lightning'
@@ -48,6 +49,7 @@ export default function App() {
           <FPSO />
           <Tanker />
           <Helicopter />
+          <Seagulls />
 
           <Precipitation />
           <Lightning />

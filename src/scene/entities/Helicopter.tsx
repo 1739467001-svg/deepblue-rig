@@ -16,6 +16,7 @@ export function Helicopter() {
   const groupRef = useRef<THREE.Group>(null!)
   const rotorRef = useRef<THREE.Mesh>(null!)
   const tailRotorRef = useRef<THREE.Group>(null!)
+  const beaconRef = useRef<THREE.MeshStandardMaterial>(null!)
   const phase = useRef(0) // 0 起飞 1 巡航 2 降落
   const clock = useRef(0)
 
@@ -27,6 +28,12 @@ export function Helicopter() {
     // 旋翼始终转(待命也怠速)
     rotorRef.current.rotation.y += delta * (active ? 60 : 8)
     tailRotorRef.current.rotation.x += delta * (active ? 80 : 10)
+
+    // 防撞红色频闪灯(约 1.3Hz 急闪),起飞后更亮
+    if (beaconRef.current) {
+      const strobe = Math.pow(Math.max(0, Math.sin(state.clock.elapsedTime * 8)), 16)
+      beaconRef.current.emissiveIntensity = strobe * (active ? 6 : 3)
+    }
 
     if (!active) {
       g.position.copy(PAD).setY(56)
@@ -86,6 +93,14 @@ export function Helicopter() {
       </group>
       {/* 起落橇 */}
       <mesh position={[0, -1.6, 0]}><boxGeometry args={[2.4, 0.1, 4]} /><meshStandardMaterial color="#333" /></mesh>
+      {/* 机腹防撞频闪灯 */}
+      <mesh position={[0, -1, 0]}>
+        <sphereGeometry args={[0.22, 8, 8]} />
+        <meshStandardMaterial ref={beaconRef} color="#2a0000" emissive="#ff2020" emissiveIntensity={3} />
+      </mesh>
+      {/* 舷灯:左红右绿 */}
+      <mesh position={[-1.5, 0, 0.5]}><sphereGeometry args={[0.16, 8, 8]} /><meshStandardMaterial color="#200" emissive="#ff2a1a" emissiveIntensity={3} /></mesh>
+      <mesh position={[1.5, 0, 0.5]}><sphereGeometry args={[0.16, 8, 8]} /><meshStandardMaterial color="#020" emissive="#1aff4a" emissiveIntensity={3} /></mesh>
     </group>
   )
 }

@@ -19,6 +19,7 @@ export function Flare({
   const flameMat = useRef<THREE.ShaderMaterial>(null!)
   const lightRef = useRef<THREE.PointLight>(null!)
   const smokeRef = useRef<THREE.Points>(null!)
+  const emberRef = useRef<THREE.Points>(null!)
 
   const flameUniforms = useMemo(
     () => ({
@@ -57,6 +58,32 @@ export function Flare({
     [],
   )
 
+  // 余烬粒子(明亮暖色火星,加性混合供 Bloom 拾取)
+  const embers = useMemo(() => {
+    const N = 70
+    const geo = new THREE.BufferGeometry()
+    const pos = new Float32Array(N * 3)
+    const seed = new Float32Array(N)
+    for (let i = 0; i < N; i++) {
+      pos[i * 3] = (Math.random() - 0.5) * 1.5
+      pos[i * 3 + 1] = Math.random() * 4
+      pos[i * 3 + 2] = (Math.random() - 0.5) * 1.5
+      seed[i] = Math.random()
+    }
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3))
+    geo.setAttribute('aSeed', new THREE.BufferAttribute(seed, 1))
+    return geo
+  }, [])
+
+  const emberUniforms = useMemo(
+    () => ({
+      uTime: { value: 0 },
+      uWind: { value: new THREE.Vector2(0.6, 0.3) },
+      uIntensity: { value: 0.85 },
+    }),
+    [],
+  )
+
   useFrame((state) => {
     const t = state.clock.elapsedTime
     const env = useSceneStore.getState().environment
@@ -69,6 +96,11 @@ export function Flare({
     smokeUniforms.uTime.value = t
     smokeUniforms.uIntensity.value = intensity
     smokeUniforms.uWind.value.set(Math.cos(env.windDirection), Math.sin(env.windDirection)).multiplyScalar(env.windSpeed * 0.12)
+
+    emberUniforms.uTime.value = t
+    emberUniforms.uIntensity.value = intensity
+    emberUniforms.uWind.value.copy(smokeUniforms.uWind.value)
+    if (emberRef.current) emberRef.current.visible = intensity > 0.05
 
     const scale = 0.5 + intensity * 1.1
     flameRef.current.scale.set(scale * 0.7, scale, scale * 0.7)
@@ -111,6 +143,17 @@ export function Flare({
           transparent
           depthWrite={false}
           blending={THREE.NormalBlending}
+        />
+      </points>
+      {/* 余烬火星 */}
+      <points ref={emberRef} position={[0, tipY + 4, 0]} geometry={embers}>
+        <shaderMaterial
+          uniforms={emberUniforms}
+          vertexShader={EMBER_VERT}
+          fragmentShader={EMBER_FRAG}
+          transparent
+          depthWrite={false}
+          blending={THREE.AdditiveBlending}
         />
       </points>
     </group>
@@ -224,5 +267,44 @@ const SMOKE_FRAG = /* glsl */ `
     float soft = smoothstep(0.5, 0.1, d);
     vec3 col = mix(vec3(0.12), vec3(0.28), vSeed);
     gl_FragColor = vec4(col, soft * vAlpha * 0.5);
+  }
+`
+
+const EMBER_VERT = /* glsl */ `
+  uniform float uTime;
+  uniform vec2 uWind;
+  uniform float uIntensity;
+  attribute float aSeed;
+  varying float vAlpha;
+  varying float vSeed;
+
+  void main(){
+    vSeed = aSeed;
+    // 比烟雾更快、生命更短,火星窜起后熄灭
+    float life = mod(uTime * (0.9 + aSeed * 0.7) + aSeed * 12.0, 1.0);
+    vec3 p = position;
+    float rise = life * 22.0;
+    p.y = rise;
+    p.x += uWind.x * rise * 0.5 + sin(aSeed * 40.0 + uTime * 6.0) * life * 2.0;
+    p.z += uWind.y * rise * 0.5 + cos(aSeed * 33.0 + uTime * 6.0) * life * 2.0;
+    vec4 mv = modelViewMatrix * vec4(p, 1.0);
+    gl_PointSize = (4.0 + aSeed * 4.0) * uIntensity / max(-mv.z, 1.0) * 60.0;
+    gl_Position = projectionMatrix * mv;
+    // 先亮后熄
+    vAlpha = pow(1.0 - life, 1.5) * uIntensity;
+  }
+`
+
+const EMBER_FRAG = /* glsl */ `
+  varying float vAlpha;
+  varying float vSeed;
+  void main(){
+    vec2 c = gl_PointCoord - 0.5;
+    float d = length(c);
+    if (d > 0.5) discard;
+    float soft = smoothstep(0.5, 0.0, d);
+    // 暖色火星:黄白核 → 橙红尾
+    vec3 col = mix(vec3(1.0, 0.55, 0.15), vec3(1.0, 0.9, 0.6), vSeed);
+    gl_FragColor = vec4(col, soft * vAlpha);
   }
 `

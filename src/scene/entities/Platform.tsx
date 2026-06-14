@@ -2,6 +2,7 @@ import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useSceneStore } from '../../state/store'
+import { nightFactor } from '../sky/daylight'
 import { Flare } from '../effects/Flare'
 
 /**
@@ -30,8 +31,104 @@ export function Platform() {
       <Crane />
       <Flare position={[44, 0, -18]} deckY={DECK_Y} />
       <ObstacleLights />
+      <DeckLights />
+      <HelideckLights />
       <Waterline />
     </group>
+  )
+}
+
+/**
+ * 甲板工作灯:夜间随日落点亮的暖色灯具(emissive + bloom)
+ * 加少量真实点光源营造甲板照明光池。白天全部熄灭。
+ */
+function DeckLights() {
+  const lampRefs = useRef<THREE.MeshStandardMaterial[]>([])
+  const lightRefs = useRef<THREE.PointLight[]>([])
+
+  // 甲板边缘 + 模块区灯柱位置(相对平台原点,甲板面 DECK_Y)
+  const lamps = useMemo<[number, number, number][]>(
+    () => [
+      [18, DECK_Y + 6, 18], [-18, DECK_Y + 6, 18], [18, DECK_Y + 6, -18], [-18, DECK_Y + 6, -18],
+      [6, DECK_Y + 10, 8], // 井架基部
+      [-6, DECK_Y + 8, -6], // 工艺区
+      [8, DECK_Y + 6, -6], // 泵橇旁
+    ],
+    [],
+  )
+  // 真实照明点光源(数量克制,不投影以保性能)
+  const pools = useMemo<[number, number, number][]>(
+    () => [[0, DECK_Y + 12, 0], [-13, DECK_Y + 10, -10], [10, DECK_Y + 8, -6]],
+    [],
+  )
+
+  useFrame(() => {
+    const env = useSceneStore.getState().environment
+    const n = nightFactor(env.timeOfDay)
+    lampRefs.current.forEach((m) => { if (m) m.emissiveIntensity = n * 4 })
+    lightRefs.current.forEach((l) => { if (l) l.intensity = n * 14 })
+  })
+
+  return (
+    <group>
+      {lamps.map((p, i) => (
+        <mesh key={i} position={p}>
+          <sphereGeometry args={[0.45, 12, 12]} />
+          <meshStandardMaterial
+            ref={(m) => { if (m) lampRefs.current[i] = m }}
+            color="#3a3320"
+            emissive="#ffd98a"
+            emissiveIntensity={0}
+          />
+        </mesh>
+      ))}
+      {pools.map((p, i) => (
+        <pointLight
+          key={i}
+          ref={(l) => { if (l) lightRefs.current[i] = l }}
+          position={p}
+          color="#ffdba0"
+          distance={70}
+          decay={1.8}
+          intensity={0}
+        />
+      ))}
+    </group>
+  )
+}
+
+/** 直升机坪边缘绿色航空灯(夜间常亮脉冲),提升海上平台真实感 */
+function HelideckLights() {
+  const refs = useRef<THREE.MeshStandardMaterial[]>([])
+  const positions = useMemo<[number, number, number][]>(() => {
+    const arr: [number, number, number][] = []
+    const r = 10.2
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2
+      arr.push([Math.cos(a) * r, DECK_Y + 1.6, 24 + Math.sin(a) * r])
+    }
+    return arr
+  }, [])
+  useFrame((state) => {
+    const env = useSceneStore.getState().environment
+    const n = nightFactor(env.timeOfDay)
+    const pulse = 0.6 + Math.sin(state.clock.elapsedTime * 2.2) * 0.4
+    refs.current.forEach((m) => { if (m) m.emissiveIntensity = n * 3 * pulse })
+  })
+  return (
+    <>
+      {positions.map((p, i) => (
+        <mesh key={i} position={p}>
+          <sphereGeometry args={[0.28, 8, 8]} />
+          <meshStandardMaterial
+            ref={(m) => { if (m) refs.current[i] = m }}
+            color="#04120a"
+            emissive="#34ff86"
+            emissiveIntensity={0}
+          />
+        </mesh>
+      ))}
+    </>
   )
 }
 
@@ -256,21 +353,57 @@ function Derrick() {
   }
 }
 
-/** 生活楼:多层白色舱室块 + 窗带 */
+/** 生活楼:多层白色舱室块 + 窗带,夜间窗内暖光逐扇点亮(模拟有人房间) */
 function LivingQuarters() {
+  // 四面窗带,每层一条;夜间发光,带每扇独立"占用"亮度与轻微闪烁
+  const winRefs = useRef<THREE.MeshStandardMaterial[]>([])
+  const seeds = useMemo(() => Array.from({ length: 12 }, () => Math.random()), [])
+
+  useFrame((state) => {
+    const env = useSceneStore.getState().environment
+    const n = nightFactor(env.timeOfDay)
+    const t = state.clock.elapsedTime
+    winRefs.current.forEach((m, i) => {
+      if (!m) return
+      const s = seeds[i] ?? 0.5
+      // 约 30% 房间"无人"(暗),其余暖光,偶有荧光灯般的极轻微闪动
+      const occupied = s > 0.3 ? 1 : 0.12
+      const flicker = 0.92 + Math.sin(t * (1.5 + s * 3) + s * 20) * 0.08
+      m.emissiveIntensity = n * occupied * 2.2 * flicker
+    })
+  })
+
+  const faces: { pos: [number, number, number]; rot: [number, number, number]; w: number }[] = [
+    { pos: [0, 0, 6.05], rot: [0, 0, 0], w: 12 },
+    { pos: [0, 0, -6.05], rot: [0, Math.PI, 0], w: 12 },
+    { pos: [7.05, 0, 0], rot: [0, Math.PI / 2, 0], w: 10 },
+    { pos: [-7.05, 0, 0], rot: [0, -Math.PI / 2, 0], w: 10 },
+  ]
+  let idx = 0
   return (
     <group position={[-13, DECK_Y + 1, -10]}>
       <mesh castShadow receiveShadow position={[0, 6, 0]}>
         <boxGeometry args={[14, 12, 12]} />
         <meshStandardMaterial {...PAINT_WHITE} />
       </mesh>
-      {/* 窗带 */}
-      {[3, 6.5, 10].map((y, i) => (
-        <mesh key={i} position={[0, y, 6.05]}>
-          <boxGeometry args={[12, 0.9, 0.1]} />
-          <meshStandardMaterial color="#1b2733" emissive="#2a3a4a" emissiveIntensity={0.3} metalness={0.2} roughness={0.2} />
-        </mesh>
-      ))}
+      {faces.map((f, fi) =>
+        [3, 6.5, 10].map((y) => {
+          const i = idx++
+          return (
+            <mesh key={`${fi}-${y}`} position={[f.pos[0], y, f.pos[2]]} rotation={f.rot}>
+              <boxGeometry args={[f.w, 0.9, 0.1]} />
+              <meshStandardMaterial
+                ref={(m) => { if (m) winRefs.current[i] = m }}
+                color="#10171f"
+                emissive="#ffd28a"
+                emissiveIntensity={0}
+                metalness={0.2}
+                roughness={0.2}
+              />
+            </mesh>
+          )
+        }),
+      )}
     </group>
   )
 }
