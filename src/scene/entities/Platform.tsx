@@ -35,7 +35,92 @@ export function Platform() {
       <HelideckLights />
       <Lifeboats />
       <DeckAccess />
+      <DeckProcess />
+      <WindSock />
       <Waterline />
+    </group>
+  )
+}
+
+/** 甲板工艺细节:管廊 + 立式分离器 + 阀门手轮 + 电缆桥架 */
+function DeckProcess() {
+  const pipeY = [3, 3.7, 4.4, 5.1]
+  const pipeColor = ['#9aa0a6', '#b5763a', '#6f7d8c', '#caa83c']
+  const supX = [-14, 0, 14]
+  return (
+    <group position={[0, DECK_Y + 1, 13]}>
+      {/* 管廊支架(门形) */}
+      {supX.map((x, i) => (
+        <group key={i} position={[x, 0, 0]}>
+          <mesh position={[-2, 2.5, 0]}><boxGeometry args={[0.5, 5, 0.5]} /><meshStandardMaterial {...STEEL_DARK} /></mesh>
+          <mesh position={[2, 2.5, 0]}><boxGeometry args={[0.5, 5, 0.5]} /><meshStandardMaterial {...STEEL_DARK} /></mesh>
+          <mesh position={[0, 5.2, 0]}><boxGeometry args={[5, 0.4, 0.5]} /><meshStandardMaterial {...STEEL_DARK} /></mesh>
+        </group>
+      ))}
+      {/* 平行工艺管线(沿 x) */}
+      {pipeY.map((y, i) => (
+        <mesh key={i} position={[0, y, 0]} rotation={[0, 0, Math.PI / 2]} castShadow>
+          <cylinderGeometry args={[0.3 - i * 0.03, 0.3 - i * 0.03, 32, 12]} />
+          <meshStandardMaterial color={pipeColor[i]} metalness={0.6} roughness={0.5} />
+        </mesh>
+      ))}
+      {/* 立式分离器(带半球封头) */}
+      <mesh position={[10, 4, -3]} castShadow>
+        <cylinderGeometry args={[1.8, 1.8, 8, 20]} />
+        <meshStandardMaterial color="#8a9095" metalness={0.7} roughness={0.45} />
+      </mesh>
+      <mesh position={[10, 8, -3]}>
+        <sphereGeometry args={[1.8, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2]} />
+        <meshStandardMaterial color="#8a9095" metalness={0.7} roughness={0.45} />
+      </mesh>
+      {/* 阀门手轮 */}
+      {([[-8, 3, 1.2], [4, 3.7, 1.2]] as [number, number, number][]).map((p, i) => (
+        <mesh key={i} position={p} rotation={[Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[0.5, 0.06, 6, 16]} />
+          <meshStandardMaterial color="#c0392b" metalness={0.4} roughness={0.5} />
+        </mesh>
+      ))}
+      {/* 电缆桥架 */}
+      <mesh position={[0, 2.2, 2.5]} rotation={[0, 0, Math.PI / 2]}>
+        <boxGeometry args={[0.4, 30, 0.8]} />
+        <meshStandardMaterial color="#555c66" metalness={0.5} roughness={0.6} />
+      </mesh>
+    </group>
+  )
+}
+
+/** 风向袋:指向下风向,风大伸平、风小下垂,带轻微飘动 —— 实时读环境风场 */
+function WindSock() {
+  const yaw = useRef<THREE.Group>(null!)
+  const sock = useRef<THREE.Group>(null!)
+  useFrame((state) => {
+    const env = useSceneStore.getState().environment
+    // 局部 +x 经 Ry(-windDir) 映射到世界 (cos,sin) 下风向
+    yaw.current.rotation.y = -env.windDirection
+    const w = THREE.MathUtils.clamp(env.windSpeed / 14, 0, 1)
+    const t = state.clock.elapsedTime
+    sock.current.rotation.z = -1.15 * (1 - w) + Math.sin(t * 3) * 0.06
+    sock.current.rotation.y = Math.sin(t * 1.7) * 0.1 * w
+  })
+  const segs = ['#ff7a18', '#f2f2f2', '#ff7a18', '#f2f2f2', '#ff7a18']
+  return (
+    <group position={[12, DECK_Y + 2, 32]}>
+      {/* 立杆 */}
+      <mesh position={[0, 3, 0]}><cylinderGeometry args={[0.12, 0.12, 6, 8]} /><meshStandardMaterial color="#cccccc" metalness={0.5} roughness={0.5} /></mesh>
+      <group ref={yaw} position={[0, 6, 0]}>
+        <group ref={sock}>
+          {segs.map((c, i) => {
+            const r0 = 0.6 - i * 0.09
+            const r1 = 0.6 - (i + 1) * 0.09
+            return (
+              <mesh key={i} position={[0.6 * i + 0.3, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+                <cylinderGeometry args={[r1, r0, 0.6, 12, 1, true]} />
+                <meshStandardMaterial color={c} side={THREE.DoubleSide} metalness={0} roughness={0.9} />
+              </mesh>
+            )
+          })}
+        </group>
+      </group>
     </group>
   )
 }
