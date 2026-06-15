@@ -226,6 +226,11 @@ const FRAG = /* glsl */ `
     float spec = pow(ndh, 380.0) * 4.0;          // 紧致高光
     float glitter = pow(ndh, 60.0) * 0.5;        // 海面碎光
     vec3 sun = uSunColor * (spec + glitter);
+    // 镀金反射带:反射方向对齐太阳的粼粼波光,低日角(黄金时刻)更长更显;
+    // 细节法线已扰动 N→R,故天然被打碎成闪烁颗粒
+    float sunPath = pow(max(dot(R, uSunDir), 0.0), 140.0);
+    float lowSun = 1.0 - clamp(uSunDir.y / 0.4, 0.0, 1.0);
+    sun += uSunColor * sunPath * (0.5 + lowSun * 1.2);
 
     // —— 次表面散射:逆光波峰泛绿光 ——
     float back = pow(clamp(dot(V, -uSunDir) * 0.5 + 0.5, 0.0, 1.0), 3.0);
