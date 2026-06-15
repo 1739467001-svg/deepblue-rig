@@ -78,6 +78,23 @@ function lerpPreset(a: Preset, b: Preset, t: number): Preset {
   }
 }
 
+/** 柔和径向辉光贴图(白心→透明),供太阳/月亮光晕共用 */
+function makeGlowTexture() {
+  const c = document.createElement('canvas')
+  c.width = c.height = 128
+  const ctx = c.getContext('2d')!
+  const g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64)
+  g.addColorStop(0, 'rgba(255,255,255,1)')
+  g.addColorStop(0.22, 'rgba(255,255,255,0.85)')
+  g.addColorStop(1, 'rgba(255,255,255,0)')
+  ctx.fillStyle = g
+  ctx.fillRect(0, 0, 128, 128)
+  return new THREE.CanvasTexture(c)
+}
+
+const _sunWorld = new THREE.Vector3()
+const _white = new THREE.Color('#ffffff')
+
 export function SkyEnvironment() {
   const sunRef = useRef<THREE.DirectionalLight>(null!)
   const ambientRef = useRef<THREE.AmbientLight>(null!)
@@ -85,10 +102,14 @@ export function SkyEnvironment() {
   const skyRef = useRef<any>(null!)
   const { scene } = useThree()
 
+  const glowTex = useMemo(() => makeGlowTexture(), [])
+  const sunCore = useRef<THREE.Sprite>(null!)
+  const sunGlow = useRef<THREE.Sprite>(null!)
+
   const sunVec = useRef(new THREE.Vector3())
   const fog = useMemo(() => new THREE.FogExp2('#aac4d8', 0.0012), [])
 
-  useFrame(() => {
+  useFrame((state) => {
     const env = useSceneStore.getState().environment
     const dir = sunDirection(env.timeOfDay)
     sunVec.current.copy(dir)
@@ -129,6 +150,26 @@ export function SkyEnvironment() {
       if (u.turbidity) u.turbidity.value = w.turbidity
       if (u.rayleigh) u.rayleigh.value = w.rayleigh
     }
+
+    // 太阳本体 + 光晕:置于相机前方太阳方向,随高度淡入、被云层(sunMul)削弱
+    _sunWorld.copy(dir).multiplyScalar(4000).add(state.camera.position)
+    const visible = dir.y > -0.04
+    const elev = THREE.MathUtils.clamp((dir.y + 0.02) / 0.16, 0, 1)
+    const op = elev * sunMul
+    const core = sunCore.current
+    const glow = sunGlow.current
+    if (core && glow) {
+      core.position.copy(_sunWorld)
+      glow.position.copy(_sunWorld)
+      core.visible = visible
+      glow.visible = visible
+      const cm = core.material as THREE.SpriteMaterial
+      const gm = glow.material as THREE.SpriteMaterial
+      cm.opacity = visible ? op : 0
+      gm.opacity = visible ? op * 0.55 : 0
+      cm.color.copy(preset.sunColor).lerp(_white, 0.55)
+      gm.color.copy(preset.sunColor)
+    }
   })
 
   const env = useSceneStore((s) => s.environment)
@@ -145,11 +186,24 @@ export function SkyEnvironment() {
         mieCoefficient={0.005}
         mieDirectionalG={0.93}
       />
+
+      {/* 太阳光晕(大)+ 本体(小),toneMapped 关以保持高亮供 Bloom 拾取;
+          作为透明对象默认在不透明体之后绘制 —— 既叠在天空上,又被近处结构遮挡 */}
+      <sprite ref={sunGlow} scale={[1100, 1100, 1]}>
+        <spriteMaterial map={glowTex} color="#ffd9a0" transparent opacity={0} depthWrite={false} blending={THREE.AdditiveBlending} toneMapped={false} fog={false} />
+      </sprite>
+      <sprite ref={sunCore} scale={[260, 260, 1]}>
+        <spriteMaterial map={glowTex} color="#fff3d6" transparent opacity={0} depthWrite={false} blending={THREE.AdditiveBlending} toneMapped={false} fog={false} />
+      </sprite>
+
       {isNight && (
         <>
           <Stars radius={800} depth={120} count={4000} factor={5} saturation={0} fade speed={0.4} />
-          {/* 月亮:远处自发光圆盘 + 柔光晕 */}
+          {/* 月亮:远处自发光圆盘 + 球形柔光晕 + billboard 大光晕 */}
           <group position={[700, 520, -1100]}>
+            <sprite scale={[520, 520, 1]}>
+              <spriteMaterial map={glowTex} color="#aebfe0" transparent opacity={0.5} depthWrite={false} blending={THREE.AdditiveBlending} toneMapped={false} fog={false} />
+            </sprite>
             <mesh>
               <sphereGeometry args={[42, 32, 32]} />
               <meshBasicMaterial color="#eef2ff" toneMapped={false} />
