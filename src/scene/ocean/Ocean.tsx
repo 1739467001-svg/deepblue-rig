@@ -170,6 +170,7 @@ const FRAG = /* glsl */ `
   uniform vec3 uFogColor;
   uniform float uFogDensity;
   uniform float uDayFactor;
+  uniform float uWaveScale;
 
   varying vec3 vWorldPos;
   varying vec3 vNormal;
@@ -238,7 +239,10 @@ const FRAG = /* glsl */ `
     col *= nightDim;
 
     // —— 白沫(波峰 + 细节高点),夜晚减弱 ——
-    float foam = clamp(vFoam + smoothstep(1.1, 1.45, hC) * detailFade * 0.5, 0.0, 1.0);
+    // 风浪联动:浪越高(uWaveScale)波峰碎白沫越密,暴风雨时海面碎白成片
+    float rough = clamp((uWaveScale - 0.95) / 0.85, 0.0, 1.0);
+    float whitecap = smoothstep(0.55, 1.0, vFoam) + smoothstep(1.2, 1.5, hC) * detailFade;
+    float foam = clamp(vFoam + smoothstep(1.1, 1.45, hC) * detailFade * 0.5 + whitecap * (0.12 + rough * 0.7), 0.0, 1.0);
     foam *= mix(0.35, 1.0, uDayFactor);
     col = mix(col, uFoamColor * mix(0.4, 1.0, uDayFactor), foam);
 
