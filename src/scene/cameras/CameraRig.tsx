@@ -82,6 +82,21 @@ export function CameraRig() {
       lookTarget.current.lerp(focusLook.current, 1 - Math.pow(0.002, delta))
       camera.lookAt(lookTarget.current)
       if (camera.position.distanceTo(focusPos.current) < 0.5) focusing.current = false
+    } else if (mode === 'free') {
+      // 平移边界:把观察点锁在主平台周边,避免相机被 pan 带到 700m+ 外的
+      // 远景装饰平台旁(那些是贴地平线的低模道具,近看会露馅)
+      const c = controlsRef.current
+      if (c?.target) {
+        const t = c.target as THREE.Vector3
+        const r = Math.hypot(t.x, t.z)
+        const R = 200
+        if (r > R) {
+          const k = R / r
+          t.x *= k
+          t.z *= k
+        }
+        t.y = THREE.MathUtils.clamp(t.y, 4, 130)
+      }
     }
   })
 
@@ -94,7 +109,7 @@ export function CameraRig() {
       enableDamping
       dampingFactor={0.05}
       minDistance={mode === 'dive' ? 6 : 30}
-      maxDistance={mode === 'dive' ? 420 : 600}
+      maxDistance={mode === 'dive' ? 420 : 460}
       maxPolarAngle={mode === 'dive' ? Math.PI : Math.PI / 2 - 0.04}
       target={mode === 'dive' ? [0, -18, 0] : [0, 28, 0]}
     />
