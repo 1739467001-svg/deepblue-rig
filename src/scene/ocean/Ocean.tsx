@@ -224,13 +224,13 @@ const FRAG = /* glsl */ `
     vec3 H = normalize(uSunDir + V);
     float ndh = max(dot(N, H), 0.0);
     float spec = pow(ndh, 380.0) * 4.0;          // 紧致高光
-    float glitter = pow(ndh, 60.0) * 0.5;        // 海面碎光
+    float glitter = pow(ndh, 60.0) * 0.7;        // 海面碎光
     vec3 sun = uSunColor * (spec + glitter);
     // 镀金反射带:反射方向对齐太阳的粼粼波光,低日角(黄金时刻)更长更显;
     // 细节法线已扰动 N→R,故天然被打碎成闪烁颗粒
-    float sunPath = pow(max(dot(R, uSunDir), 0.0), 140.0);
+    float sunPath = pow(max(dot(R, uSunDir), 0.0), 95.0);
     float lowSun = 1.0 - clamp(uSunDir.y / 0.4, 0.0, 1.0);
-    sun += uSunColor * sunPath * (0.5 + lowSun * 1.2);
+    sun += uSunColor * sunPath * (1.05 + lowSun * 1.6);
 
     // —— 次表面散射:逆光波峰泛绿光 ——
     float back = pow(clamp(dot(V, -uSunDir) * 0.5 + 0.5, 0.0, 1.0), 3.0);
@@ -246,8 +246,8 @@ const FRAG = /* glsl */ `
     // —— 白沫(波峰 + 细节高点),夜晚减弱 ——
     // 风浪联动:浪越高(uWaveScale)波峰碎白沫越密,暴风雨时海面碎白成片
     float rough = clamp((uWaveScale - 0.95) / 0.85, 0.0, 1.0);
-    float whitecap = smoothstep(0.55, 1.0, vFoam) + smoothstep(1.2, 1.5, hC) * detailFade;
-    float foam = clamp(vFoam + smoothstep(1.1, 1.45, hC) * detailFade * 0.5 + whitecap * (0.12 + rough * 0.7), 0.0, 1.0);
+    float whitecap = smoothstep(0.72, 1.05, vFoam) + smoothstep(1.3, 1.55, hC) * detailFade;
+    float foam = clamp(vFoam * 0.82 + smoothstep(1.15, 1.5, hC) * detailFade * 0.4 + whitecap * (0.04 + rough * 0.42), 0.0, 1.0);
     foam *= mix(0.35, 1.0, uDayFactor);
     col = mix(col, uFoamColor * mix(0.4, 1.0, uDayFactor), foam);
 

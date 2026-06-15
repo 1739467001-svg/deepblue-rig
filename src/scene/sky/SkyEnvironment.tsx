@@ -166,7 +166,7 @@ export function SkyEnvironment() {
       const cm = core.material as THREE.SpriteMaterial
       const gm = glow.material as THREE.SpriteMaterial
       cm.opacity = visible ? op : 0
-      gm.opacity = visible ? op * 0.55 : 0
+      gm.opacity = visible ? op * 0.48 : 0
       cm.color.copy(preset.sunColor).lerp(_white, 0.55)
       gm.color.copy(preset.sunColor)
     }
@@ -189,7 +189,7 @@ export function SkyEnvironment() {
 
       {/* 太阳光晕(大)+ 本体(小),toneMapped 关以保持高亮供 Bloom 拾取;
           作为透明对象默认在不透明体之后绘制 —— 既叠在天空上,又被近处结构遮挡 */}
-      <sprite ref={sunGlow} scale={[1100, 1100, 1]}>
+      <sprite ref={sunGlow} scale={[760, 760, 1]}>
         <spriteMaterial map={glowTex} color="#ffd9a0" transparent opacity={0} depthWrite={false} blending={THREE.AdditiveBlending} toneMapped={false} fog={false} />
       </sprite>
       <sprite ref={sunCore} scale={[260, 260, 1]}>
