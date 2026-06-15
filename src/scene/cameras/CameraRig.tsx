@@ -61,7 +61,11 @@ export function CameraRig() {
         focusing.current = true
       }
     }
-  }, [mode, focusedId])
+    // 进入海底:把相机放到导管架旁的水下机位
+    if (mode === 'dive') {
+      camera.position.set(46, -13, 46)
+    }
+  }, [mode, focusedId, camera])
 
   useFrame((state, delta) => {
     if (mode === 'cruise') {
@@ -81,16 +85,18 @@ export function CameraRig() {
     }
   })
 
-  return mode === 'free' ? (
+  // free 与 dive 均用 OrbitControls;dive 放开俯仰限制以便仰望水面、贴近海床
+  const orbit = mode === 'free' || mode === 'dive'
+  return orbit ? (
     <OrbitControls
       ref={controlsRef}
       enablePan
       enableDamping
       dampingFactor={0.05}
-      minDistance={30}
-      maxDistance={600}
-      maxPolarAngle={Math.PI / 2 - 0.04}
-      target={[0, 28, 0]}
+      minDistance={mode === 'dive' ? 6 : 30}
+      maxDistance={mode === 'dive' ? 420 : 600}
+      maxPolarAngle={mode === 'dive' ? Math.PI : Math.PI / 2 - 0.04}
+      target={mode === 'dive' ? [0, -18, 0] : [0, 28, 0]}
     />
   ) : null
 }

@@ -58,4 +58,4 @@ export const EnvironmentState = z.object({
 })
 export type EnvironmentState = z.infer<typeof EnvironmentState>
 
-export type CameraMode = 'free' | 'cruise' | 'focus'
+export type CameraMode = 'free' | 'cruise' | 'focus' | 'dive'

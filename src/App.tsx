@@ -18,6 +18,7 @@ import { Precipitation } from './scene/weather/Precipitation'
 import { Lightning } from './scene/weather/Lightning'
 import { PostFX } from './scene/postfx/PostFX'
 import { CameraRig } from './scene/cameras/CameraRig'
+import { Underwater } from './scene/underwater/Underwater'
 import { Simulator } from './state/simulator/Simulator'
 import { DeviceMarkers } from './hud/DeviceMarkers'
 import { Hud } from './hud/Hud'
@@ -59,6 +60,7 @@ export default function App() {
 
           <Precipitation />
           <Lightning />
+          <Underwater />
           <DeviceMarkers />
 
           <CameraRig />

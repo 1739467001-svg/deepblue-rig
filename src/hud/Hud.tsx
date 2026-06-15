@@ -16,6 +16,7 @@ const CAMERA_LABEL: Record<CameraMode, string> = {
   free: '自由',
   cruise: '巡航',
   focus: '聚焦',
+  dive: '海底',
 }
 
 function fmtTime(t: number) {
@@ -75,7 +76,7 @@ export function Hud() {
       <div className="pointer-events-auto absolute bottom-5 left-1/2 flex -translate-x-1/2 flex-wrap items-center justify-center gap-3 rounded-xl border border-white/10 bg-black/45 px-4 py-3 backdrop-blur-md">
         {/* 相机模式 */}
         <Group label="相机">
-          {(['cruise', 'free', 'focus'] as CameraMode[]).map((m) => (
+          {(['cruise', 'free', 'focus', 'dive'] as CameraMode[]).map((m) => (
             <Btn key={m} active={cameraMode === m} onClick={() => { setCameraMode(m); if (m !== 'focus') setFocused(null) }}>
               {CAMERA_LABEL[m]}
             </Btn>
