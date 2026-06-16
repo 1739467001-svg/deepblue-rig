@@ -24,6 +24,7 @@ export function CloudLayer() {
       uSunColor: { value: new THREE.Color('#ffe7c2') },
       uSkyTint: { value: new THREE.Color('#aac4d8') },
       uOpacity: { value: 1 },
+      uDay: { value: 1 },
     }),
     [],
   )
@@ -42,6 +43,7 @@ export function CloudLayer() {
     const day = THREE.MathUtils.clamp((dir.y + 0.08) / 0.4, 0, 1)
     u.uSunColor.value.set('#ffe7c2').lerp(new THREE.Color('#2a3450'), 1 - day)
     u.uSkyTint.value.set('#aac4d8').lerp(new THREE.Color('#0c1424'), 1 - day)
+    u.uDay.value = day
     // 跟随相机
     meshRef.current.position.set(state.camera.position.x, 0, state.camera.position.z)
   })
@@ -82,6 +84,7 @@ const FRAG = /* glsl */ `
   uniform vec3 uSunDir;
   uniform vec3 uSunColor;
   uniform vec3 uSkyTint;
+  uniform float uDay;
   varying vec3 vWorldDir;
 
   float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
@@ -135,6 +138,8 @@ const FRAG = /* glsl */ `
     alpha *= horizonFade;
 
     if (alpha < 0.01) discard;
+    // 夜间整体压暗云层:避免半夜亮白云吊起 Bloom、与暗海面形成刺眼黑白地平线
+    col *= mix(0.22, 1.0, uDay);
     gl_FragColor = vec4(col, alpha);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>

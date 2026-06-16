@@ -206,11 +206,11 @@ export function SkyEnvironment() {
             </sprite>
             <mesh>
               <sphereGeometry args={[42, 32, 32]} />
-              <meshBasicMaterial color="#eef2ff" toneMapped={false} />
+              <meshBasicMaterial color="#eef2ff" toneMapped={false} fog={false} />
             </mesh>
             <mesh>
               <sphereGeometry args={[78, 32, 32]} />
-              <meshBasicMaterial color="#a9c0e8" transparent opacity={0.22} depthWrite={false} toneMapped={false} />
+              <meshBasicMaterial color="#a9c0e8" transparent opacity={0.22} depthWrite={false} toneMapped={false} fog={false} />
             </mesh>
           </group>
         </>
