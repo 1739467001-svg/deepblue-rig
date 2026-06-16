@@ -124,7 +124,9 @@ const VERT = /* glsl */ `
 
       float k = 2.0 * PI / wavelength;
       float q = steepness / (k * amplitude * float(uWaveCount));
-      float phase = k * dot(d, vec2(wx, wz)) + speed * k * uTime;
+      // 相位对 2π 取模:sin/cos 为 2π 周期,结果完全等价(波形无变化、无跳变),
+      // 但参数恒定在 [0,2π),避免 uTime 增大后 sin(超大值) 在部分 GPU 上返回 NaN→整片炸白
+      float phase = mod(k * dot(d, vec2(wx, wz)) + speed * k * uTime, 6.283185307179586);
       float c = cos(phase);
       float s = sin(phase);
 
