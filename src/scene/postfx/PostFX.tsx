@@ -5,13 +5,16 @@ import {
   SSAO,
   ToneMapping,
   SMAA,
+  HueSaturation,
+  BrightnessContrast,
 } from '@react-three/postprocessing'
 import { BlendFunction, ToneMappingMode } from 'postprocessing'
 import { useSceneStore } from '../../state/store'
 
 /**
- * 后处理管线:SSAO → Bloom → Vignette → ACES ToneMapping。
+ * 后处理管线:SSAO → Bloom → Vignette → ACES ToneMapping → 色彩分级。
  * 按画质档降级:low/medium 关 SSAO,保 Bloom + ToneMapping。
+ * 末端色彩分级(对比度/饱和度微调)统一画面,提升电影出片感。
  */
 export function PostFX() {
   const quality = useSceneStore((s) => s.quality)
@@ -46,6 +49,9 @@ export function PostFX() {
       />
       <Vignette eskil={false} offset={0.18} darkness={0.7} />
       <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
+      {/* 末端电影级色彩分级:轻微提对比 + 提饱和,深海蓝更通透、暖调更出片 */}
+      <BrightnessContrast brightness={0.0} contrast={0.1} />
+      <HueSaturation saturation={0.12} hue={0.0} />
     </EffectComposer>
   )
 }
