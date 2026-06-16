@@ -87,7 +87,12 @@ const FRAG = /* glsl */ `
   uniform float uDay;
   varying vec3 vWorldDir;
 
-  float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
+  // 无 sin 稳定哈希(Hoskins):对超大坐标/时间仍有界,避免 sin(huge) 在部分 GPU 上崩溃为 NaN
+  float hash(vec2 p){
+    vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+    p3 += dot(p3, p3.yzx + 33.33);
+    return fract((p3.x + p3.y) * p3.z);
+  }
   float noise(vec2 p){
     vec2 i=floor(p), f=fract(p);
     float a=hash(i), b=hash(i+vec2(1,0)), c=hash(i+vec2(0,1)), d=hash(i+vec2(1,1));
