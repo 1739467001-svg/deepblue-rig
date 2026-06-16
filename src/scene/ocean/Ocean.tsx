@@ -221,7 +221,8 @@ const FRAG = /* glsl */ `
     vec3 skyRefl = mix(uHorizonColor, uSkyColor, skyT);
 
     // —— 太阳镜面 + 闪烁拉丝 ——
-    vec3 H = normalize(uSunDir + V);
+    vec3 hv = uSunDir + V;
+    vec3 H = dot(hv, hv) > 1e-6 ? normalize(hv) : N;  // 防 V≈-sunDir 时 normalize(0)→NaN
     float ndh = max(dot(N, H), 0.0);
     float spec = pow(ndh, 380.0) * 4.0;          // 紧致高光
     float glitter = pow(ndh, 60.0) * 0.7;        // 海面碎光
@@ -254,6 +255,17 @@ const FRAG = /* glsl */ `
     // —— 大气透视 ——
     float fog = 1.0 - exp(-uFogDensity * vViewDist);
     col = mix(col, uFogColor, clamp(fog, 0.0, 1.0));
+
+    // —— 数值兜底 ——
+    // 某些 GPU/驱动在特定朝向会让 pow/normalize 产生 NaN/Inf,而 NaN 常被渲染成
+    // 纯白(SwiftShader 等会冲刷为 0 故不可见)。用三元自比较剔除 NaN 回退到雾色
+    // (不可用 mix:NaN*0 仍为 NaN),再钳制上限,确保任何硬件上海面都不会整片炸白。
+    col = vec3(
+      col.x == col.x ? col.x : uFogColor.x,
+      col.y == col.y ? col.y : uFogColor.y,
+      col.z == col.z ? col.z : uFogColor.z
+    );
+    col = clamp(col, 0.0, 6.0);
 
     gl_FragColor = vec4(col, 1.0);
     #include <tonemapping_fragment>
