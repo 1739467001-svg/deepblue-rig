@@ -39,6 +39,8 @@ export function Hud() {
   const setQuality = useSceneStore((s) => s.setQuality)
   const setSimulating = useSceneStore((s) => s.setSimulating)
   const setFocused = useSceneStore((s) => s.setFocused)
+  const audioOn = useSceneStore((s) => s.audioOn)
+  const setAudioOn = useSceneStore((s) => s.setAudioOn)
 
   const [, force] = useState(0)
   // 让时间显示随帧刷新
@@ -118,6 +120,11 @@ export function Hud() {
         <Group label="模拟">
           <Btn active={simulating} onClick={() => setSimulating(!simulating)}>
             {simulating ? '运行中' : '已停'}
+          </Btn>
+        </Group>
+        <Group label="声音">
+          <Btn active={audioOn} onClick={() => setAudioOn(!audioOn)}>
+            {audioOn ? '🔊 开' : '🔈 关'}
           </Btn>
         </Group>
       </div>

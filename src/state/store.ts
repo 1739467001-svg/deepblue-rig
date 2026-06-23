@@ -20,6 +20,8 @@ interface SceneStore {
   quality: 'high' | 'medium' | 'low'
   /** 模拟器开关 */
   simulating: boolean
+  /** 背景氛围音开关(浏览器策略:须用户手势后开启) */
+  audioOn: boolean
 
   // —— 统一事件入口 ——
   updateDeviceState: (id: string, patch: Partial<DeviceState>) => void
@@ -30,6 +32,7 @@ interface SceneStore {
   setFocused: (id: string | null) => void
   setQuality: (q: 'high' | 'medium' | 'low') => void
   setSimulating: (on: boolean) => void
+  setAudioOn: (on: boolean) => void
 }
 
 const now = () => performance.now()
@@ -114,6 +117,7 @@ export const useSceneStore = create<SceneStore>((set) => ({
   focusedId: null,
   quality: 'high',
   simulating: true,
+  audioOn: false,
 
   updateDeviceState: (id, patch) =>
     set((s) => {
@@ -142,6 +146,7 @@ export const useSceneStore = create<SceneStore>((set) => ({
   setFocused: (focusedId) => set({ focusedId }),
   setQuality: (quality) => set({ quality }),
   setSimulating: (simulating) => set({ simulating }),
+  setAudioOn: (audioOn) => set({ audioOn }),
 }))
 
 /** 设备健康总览(绿/黄/红/离线计数) */

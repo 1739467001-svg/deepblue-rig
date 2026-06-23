@@ -22,6 +22,7 @@ import { Underwater } from './scene/underwater/Underwater'
 import { Simulator } from './state/simulator/Simulator'
 import { DeviceMarkers } from './hud/DeviceMarkers'
 import { Hud } from './hud/Hud'
+import { AudioControl } from './audio/AudioControl'
 
 export default function App() {
   return (
@@ -74,6 +75,7 @@ export default function App() {
       </Canvas>
 
       <Hud />
+      <AudioControl />
     </>
   )
 }
